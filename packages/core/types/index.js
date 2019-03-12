@@ -292,31 +292,39 @@ export type GraphTraversalCallback<TNode, TContext> = (
 
 export type NodeId = string;
 
-export type Edge = {|
-  from: NodeId,
-  to: NodeId
+export type AssetNode = {|id: string, type: 'asset', value: Asset|};
+export type AssetReferenceNode = {|
+  id: string,
+  type: 'asset_reference',
+  value: Asset
 |};
 
-export interface Graph<TNode: Node> {
-  nodes: Map<string, TNode>;
-  edges: Set<Edge>;
-  merge(graph: Graph<TNode>): void;
-  traverse<TContext>(
-    visit: GraphTraversalCallback<TNode, TContext>,
-    startNode: ?TNode
-  ): ?TContext;
-}
+export type BundleNode = {|
+  id: string,
+  type: 'bundle',
+  value: Bundle
+|};
 
-// TODO: what do we want to expose here?
-export interface AssetGraph extends Graph<Node> {
-  traverseAssets(visit: GraphTraversalCallback<Asset, Node>): ?Node;
-  createBundle(asset: Asset): Bundle;
-  getTotalSize(asset?: Asset): number;
-  getEntryAssets(): Array<Asset>;
-  removeAsset(asset: Asset): void;
-  getDependencies(asset: Asset): Array<Dependency>;
-  getDependencyResolution(dependency: Dependency): ?Asset;
-}
+export type BundleGroupNode = {|
+  id: string,
+  type: 'bundle_group',
+  value: BundleGroup
+|};
+
+export type DependencyNode = {|
+  id: string,
+  type: 'dependency',
+  value: Dependency
+|};
+
+export type FileNode = {|id: string, type: 'file', value: File|};
+export type RootNode = {|id: string, type: 'root', value: string | null|};
+
+export type TransformerRequestNode = {|
+  id: string,
+  type: 'transformer_request',
+  value: TransformerRequest
+|};
 
 export type BundleGroup = {
   dependency: Dependency,
@@ -334,13 +342,68 @@ export type Bundle = {|
   filePath?: FilePath
 |};
 
-export interface BundleGraph extends Graph<Node> {
-  addBundleGroup(parentBundle: ?Bundle, bundleGroup: BundleGroup): void;
+export type AssetGraphNode =
+  | AssetNode
+  | AssetReferenceNode
+  | DependencyNode
+  | FileNode
+  | RootNode
+  | TransformerRequestNode
+  // Bundle graphs are merged into asset graphs during the bundling phase
+  | BundleGraphNode;
+
+export type BundleGraphNode = BundleNode | BundleGroupNode | RootNode;
+
+export type Edge = {|
+  from: NodeId,
+  to: NodeId
+|};
+
+export type GraphUpdates<TNode> = {|
+  added: Graph<TNode>,
+  removed: Graph<TNode>
+|};
+
+export interface Graph<TNode: Node> {
+  edges: Set<Edge>;
+  nodes: Map<string, TNode>;
+  addEdge(edge: Edge): Edge;
+  addNode(node: TNode): TNode;
+  getNode(id: string): ?TNode;
+  getNodesConnectedFrom(node: TNode): Array<TNode>;
+  getRootNode(): ?TNode;
+  hasNode(id: string): boolean;
+  merge(graph: Graph<TNode>): void;
+  replaceNodesConnectedTo(
+    fromNode: TNode,
+    toNodes: Array<TNode>
+  ): GraphUpdates<TNode>;
+  traverse<TContext>(
+    visit: GraphTraversalCallback<TNode, TContext>,
+    startNode: ?TNode
+  ): ?TContext;
+}
+
+// TODO: what do we want to expose here?
+export interface AssetGraph extends Graph<AssetGraphNode> {
+  createBundle(asset: Asset): Bundle;
+  getDependencies(asset: Asset): Array<Dependency>;
+  getDependencyResolution(dependency: Dependency): ?Asset;
+  getEntryAssets(): Array<Asset>;
+  getTotalSize(asset?: Asset): number;
+  removeAsset(asset: Asset): void;
+  traverseAssets(
+    visit: GraphTraversalCallback<Asset, AssetGraphNode>
+  ): ?AssetGraphNode;
+}
+
+export interface BundleGraph extends Graph<BundleGraphNode> {
   addBundle(bundleGroup: BundleGroup, bundle: Bundle): void;
-  isAssetInAncestorBundle(bundle: Bundle, asset: Asset): boolean;
+  addBundleGroup(parentBundle: ?Bundle, bundleGroup: BundleGroup): void;
   findBundlesWithAsset(asset: Asset): Array<Bundle>;
-  getBundles(bundleGroup: BundleGroup): Array<Bundle>;
   getBundleGroups(bundle: Bundle): Array<BundleGroup>;
+  getBundles(bundleGroup: BundleGroup): Array<Bundle>;
+  isAssetInAncestorBundle(bundle: Bundle, asset: Asset): boolean;
   traverseBundles<TContext>(
     visit: GraphTraversalCallback<Bundle, TContext>
   ): ?TContext;
